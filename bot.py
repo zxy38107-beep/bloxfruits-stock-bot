@@ -1,33 +1,105 @@
 import discord
+import requests
 import os
+import json
 import asyncio
 
 TOKEN = os.getenv("DISCORD_TOKEN")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
 
-intents = discord.Intents.default()
-intents.guilds = True
+STOCK_FILE = "stock_data.json"
+RARE_FRUITS = ["Kitsune", "Dragon"]
+API_URL = "https://blox-fruit-api.vercel.app/api/stock"
 
+intents = discord.Intents.default()
 client = discord.Client(intents=intents)
+
+def fetch_stock():
+    try:
+        r = requests.get(API_URL, timeout=15)
+        if r.status_code != 200:
+            return None
+
+        data = r.json()
+        return {
+            "normal": data.get("stock", []),
+            "mirage": data.get("mirageStock", [])
+        }
+    except:
+        return None
+
+def load_old_stock():
+    if not os.path.exists(STOCK_FILE):
+        return {"normal": [], "mirage": []}
+
+    try:
+        with open(STOCK_FILE, "r") as f:
+            return json.load(f)
+    except:
+        return {"normal": [], "mirage": []}
+
+def save_stock(stock):
+    with open(STOCK_FILE, "w") as f:
+        json.dump(stock, f, indent=2)
+
+def stock_embed(title, stock, color):
+    embed = discord.Embed(
+        title=title,
+        description="\n".join(f"• {fruit}" for fruit in stock) or "No fruits",
+        color=color
+    )
+    embed.set_footer(text="Blox Fruits Stock Bot")
+    return embed
+
+def rare_embed(dealer, fruits):
+    embed = discord.Embed(
+        title="🔥 RARE FRUIT ALERT 🔥",
+        description=f"**{dealer} Dealer**\n\n" +
+                    "\n".join(f"🟡 {f}" for f in fruits),
+        color=0xFF0000
+    )
+    embed.set_footer(text="Hurry before reset!")
+    return embed
 
 @client.event
 async def on_ready():
-    print("Logged in as:", client.user)
+    channel = await client.fetch_channel(CHANNEL_ID)
 
-    try:
-        channel = await client.fetch_channel(CHANNEL_ID)
-        print("Fetched channel:", channel)
-    except Exception as e:
-        print("FAILED TO FETCH CHANNEL:", e)
+    new_stock = fetch_stock()
+    if not new_stock:
         await client.close()
         return
 
-    try:
-        await channel.send("✅ **TEST MESSAGE: BOT CAN SEND MESSAGES**")
-        print("MESSAGE SENT SUCCESSFULLY")
-    except Exception as e:
-        print("FAILED TO SEND MESSAGE:", e)
+    old_stock = load_old_stock()
 
+    if new_stock["normal"] != old_stock["normal"]:
+        await channel.send(
+            embed=stock_embed(
+                "🍏 Normal Dealer Stock Updated",
+                new_stock["normal"],
+                0x00FF99
+            )
+        )
+
+    if new_stock["mirage"] != old_stock["mirage"]:
+        await channel.send(
+            embed=stock_embed(
+                "🌊 Mirage Dealer Stock Updated",
+                new_stock["mirage"],
+                0x3399FF
+            )
+        )
+
+    for dealer in ["normal", "mirage"]:
+        new_rare = [f for f in new_stock[dealer] if f in RARE_FRUITS]
+        old_rare = [f for f in old_stock.get(dealer, []) if f in RARE_FRUITS]
+
+        if new_rare and new_rare != old_rare:
+            await channel.send(
+                embed=rare_embed(dealer.capitalize(), new_rare)
+            )
+
+    save_stock(new_stock)
     await client.close()
 
 client.run(TOKEN)
