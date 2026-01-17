@@ -17,14 +17,11 @@ client = discord.Client(intents=intents)
 
 # ---------------- FETCH STOCK ----------------
 
-def try_fetch(url):
-    try:
-        r = requests.get(url, timeout=15)
-        if r.status_code != 200:
-            return None
-        return r.json()
-    except:
-        return None
+HEADERS = {
+    "User-Agent": "Mozilla/5.0",
+    "Accept": "application/json"
+}
+
 
 def fetch_stock():
     print("Fetching stock...")
