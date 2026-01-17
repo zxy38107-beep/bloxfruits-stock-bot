@@ -81,7 +81,7 @@ def rare_embed(dealer, fruits):
 
 @client.event
 async def on_ready():
-  channel = await client.fetch_channel(CHANNEL_ID)
+    channel = await client.fetch_channel(CHANNEL_ID)
 
 
     new_stock = fetch_stock()
