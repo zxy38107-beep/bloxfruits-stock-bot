@@ -12,30 +12,33 @@ RARE_FRUITS = ["Kitsune", "Dragon"]
 PRIMARY_API = "https://blox-fruit-api.vercel.app/api/stock"
 BACKUP_API = "https://api.bloxfruitsapi.com/stock"
 
-intents = discord.Intents.default()
-client = discord.Client(intents=intents)
-
-# ---------------- FETCH STOCK ----------------
-
 HEADERS = {
     "User-Agent": "Mozilla/5.0",
     "Accept": "application/json"
 }
 
+intents = discord.Intents.default()
+client = discord.Client(intents=intents)
+
+# ---------------- FETCH HELPERS ----------------
+
+def try_fetch(url):
+    for _ in range(3):
+        try:
+            r = requests.get(url, headers=HEADERS, timeout=20)
+            if r.status_code == 200:
+                return r.json()
+        except:
+            pass
+    return None
 
 def fetch_stock():
-    print("Fetching stock...")
-
     data = try_fetch(PRIMARY_API)
     if not data:
-        print("Primary API failed, trying backup...")
         data = try_fetch(BACKUP_API)
 
     if not data:
-        print("ALL APIs FAILED")
         return None
-
-    print("Stock fetched successfully")
 
     return {
         "normal": data.get("stock", []),
@@ -73,14 +76,13 @@ def rare_embed(dealer, fruits):
                     "\n".join(f"🟡 {f}" for f in fruits),
         color=0xFF0000
     )
+    embed.set_footer(text="Hurry before reset!")
     return embed
 
 # ---------------- BOT ----------------
 
 @client.event
 async def on_ready():
-    print("Bot logged in")
-
     channel = await client.fetch_channel(CHANNEL_ID)
 
     new_stock = fetch_stock()
@@ -93,14 +95,20 @@ async def on_ready():
 
     if new_stock["normal"] != old_stock["normal"]:
         await channel.send(
-            embed=stock_embed("🍏 Normal Dealer Stock Updated",
-                              new_stock["normal"], 0x00FF99)
+            embed=stock_embed(
+                "🍏 Normal Dealer Stock Updated",
+                new_stock["normal"],
+                0x00FF99
+            )
         )
 
     if new_stock["mirage"] != old_stock["mirage"]:
         await channel.send(
-            embed=stock_embed("🌊 Mirage Dealer Stock Updated",
-                              new_stock["mirage"], 0x3399FF)
+            embed=stock_embed(
+                "🌊 Mirage Dealer Stock Updated",
+                new_stock["mirage"],
+                0x3399FF
+            )
         )
 
     for dealer in ["normal", "mirage"]:
@@ -108,7 +116,9 @@ async def on_ready():
         old_rare = [f for f in old_stock.get(dealer, []) if f in RARE_FRUITS]
 
         if new_rare and new_rare != old_rare:
-            await channel.send(embed=rare_embed(dealer.capitalize(), new_rare))
+            await channel.send(
+                embed=rare_embed(dealer.capitalize(), new_rare)
+            )
 
     save_stock(new_stock)
     await client.close()
