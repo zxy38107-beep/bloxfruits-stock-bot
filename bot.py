@@ -9,8 +9,11 @@ CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
 STOCK_FILE = "stock_data.json"
 RARE_FRUITS = ["Kitsune", "Dragon"]
 
-PRIMARY_API = "https://blox-fruit-api.vercel.app/api/stock"
-BACKUP_API = "https://api.bloxfruitsapi.com/stock"
+# Reliable mirrors (NOT the flaky one)
+MIRROR_APIS = [
+    "https://api.bloxfruitsapi.com/stock",
+    "https://bloxfruits-stock.vercel.app/api/stock"
+]
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0",
@@ -20,30 +23,21 @@ HEADERS = {
 intents = discord.Intents.default()
 client = discord.Client(intents=intents)
 
-# ---------------- FETCH HELPERS ----------------
+# ---------------- FETCH STOCK ----------------
 
-def try_fetch(url):
-    for _ in range(3):
+def fetch_stock():
+    for url in MIRROR_APIS:
         try:
             r = requests.get(url, headers=HEADERS, timeout=20)
             if r.status_code == 200:
-                return r.json()
+                data = r.json()
+                return {
+                    "normal": data.get("stock", []),
+                    "mirage": data.get("mirageStock", [])
+                }
         except:
             pass
     return None
-
-def fetch_stock():
-    data = try_fetch(PRIMARY_API)
-    if not data:
-        data = try_fetch(BACKUP_API)
-
-    if not data:
-        return None
-
-    return {
-        "normal": data.get("stock", []),
-        "mirage": data.get("mirageStock", [])
-    }
 
 # ---------------- FILE IO ----------------
 
@@ -87,7 +81,7 @@ async def on_ready():
 
     new_stock = fetch_stock()
     if not new_stock:
-        await channel.send("⚠️ Stock API unavailable. Will retry next run.")
+        await channel.send("⚠️ Stock mirrors unavailable. Will retry.")
         await client.close()
         return
 
